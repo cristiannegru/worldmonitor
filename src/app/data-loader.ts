@@ -1514,33 +1514,47 @@ export class DataLoaderManager implements AppModule {
     const tradePanel = this.ctx.panels['trade-policy'] as TradePolicyPanel | undefined;
     if (!tradePanel) return;
 
+    // Stagger WTO API calls sequentially — the free tier has a strict per-minute quota.
+    // Firing all 6 requests in parallel exhausts it instantly → 403 Quota Exceeded.
+    let totalItems = 0;
+    let allUnavailable = true;
+
     try {
-      const [restrictions, tariffs, flows, barriers] = await Promise.all([
-        fetchTradeRestrictions([], 50),
-        fetchTariffTrends('840', '156', '', 10),
-        fetchTradeFlows('840', '156', 10),
-        fetchTradeBarriers([], '', 50),
-      ]);
-
+      const restrictions = await fetchTradeRestrictions([], 50);
       tradePanel.updateRestrictions(restrictions);
+      totalItems += restrictions.restrictions.length;
+      if (!restrictions.upstreamUnavailable) allUnavailable = false;
+
+      const tariffs = await fetchTariffTrends('840', '000', '', 10);
       tradePanel.updateTariffs(tariffs);
-      tradePanel.updateFlows(flows);
+      totalItems += tariffs.datapoints.length;
+      if (!tariffs.upstreamUnavailable) allUnavailable = false;
+
+      const barriers = await fetchTradeBarriers([], '', 50);
       tradePanel.updateBarriers(barriers);
+      totalItems += barriers.barriers.length;
+      if (!barriers.upstreamUnavailable) allUnavailable = false;
 
-      const totalItems = restrictions.restrictions.length + tariffs.datapoints.length + flows.flows.length + barriers.barriers.length;
-      const anyUnavailable = restrictions.upstreamUnavailable || tariffs.upstreamUnavailable || flows.upstreamUnavailable || barriers.upstreamUnavailable;
+      const flows = await fetchTradeFlows('840', '000', 10);
+      tradePanel.updateFlows(flows);
+      totalItems += flows.flows.length;
+      if (!flows.upstreamUnavailable) allUnavailable = false;
 
-      this.ctx.statusPanel?.updateApi('WTO', { status: anyUnavailable ? 'warning' : totalItems > 0 ? 'ok' : 'error' });
+      this.ctx.statusPanel?.updateApi('WTO', { status: allUnavailable ? 'warning' : totalItems > 0 ? 'ok' : 'error' });
 
       if (totalItems > 0) {
         dataFreshness.recordUpdate('wto_trade', totalItems);
-      } else if (anyUnavailable) {
+      } else if (allUnavailable) {
         dataFreshness.recordError('wto_trade', 'WTO upstream temporarily unavailable');
       }
     } catch (e) {
       console.error('[App] Trade policy failed:', e);
-      this.ctx.statusPanel?.updateApi('WTO', { status: 'error' });
-      dataFreshness.recordError('wto_trade', String(e));
+      this.ctx.statusPanel?.updateApi('WTO', { status: totalItems > 0 ? 'warning' : 'error' });
+      if (totalItems > 0) {
+        dataFreshness.recordUpdate('wto_trade', totalItems);
+      } else {
+        dataFreshness.recordError('wto_trade', String(e));
+      }
     }
   }
 

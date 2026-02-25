@@ -80,10 +80,10 @@ export class TradePolicyPanel extends Panel {
       </div>
     `;
 
-    // Check for upstream unavailable across all data sources
-    const anyUnavailable = [this.restrictionsData, this.tariffsData, this.flowsData, this.barriersData]
-      .some(d => d?.upstreamUnavailable);
-    const unavailableBanner = anyUnavailable
+    // Only show unavailable banner when ALL loaded sources failed — not when one partial failure occurs
+    const loadedSources = [this.restrictionsData, this.tariffsData, this.flowsData, this.barriersData].filter(Boolean);
+    const allUnavailable = loadedSources.length > 0 && loadedSources.every(d => d!.upstreamUnavailable);
+    const unavailableBanner = allUnavailable
       ? `<div class="economic-warning">${t('components.tradePolicy.upstreamUnavailable')}</div>`
       : '';
 

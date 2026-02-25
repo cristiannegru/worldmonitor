@@ -126,11 +126,9 @@ async function fetchTradeFlows(
     max: '500',
   };
 
-  // Fetch exports and imports in parallel (separate requests — WTO API doesn't support comma-separated indicators)
-  const [exportsData, importsData] = await Promise.all([
-    wtoFetch('/data', { ...baseParams, i: ITS_MTV_AX }),
-    wtoFetch('/data', { ...baseParams, i: ITS_MTV_AM }),
-  ]);
+  // Fetch exports and imports sequentially — WTO free tier has strict per-minute quota
+  const exportsData = await wtoFetch('/data', { ...baseParams, i: ITS_MTV_AX });
+  const importsData = await wtoFetch('/data', { ...baseParams, i: ITS_MTV_AM });
 
   if (!exportsData && !importsData) return { flows: [], ok: false };
 

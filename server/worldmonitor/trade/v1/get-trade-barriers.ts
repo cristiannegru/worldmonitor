@@ -69,25 +69,23 @@ async function fetchBarriers(
   const currentYear = new Date().getFullYear();
   const reporters = MAJOR_REPORTERS.join(',');
 
-  // Fetch agricultural and non-agricultural tariffs in parallel
-  const [agriData, nonAgriData] = await Promise.all([
-    wtoFetch('/data', {
-      i: 'TP_A_0160',
-      r: reporters,
-      ps: `${currentYear - 3}-${currentYear}`,
-      fmt: 'json',
-      mode: 'full',
-      max: '500',
-    }),
-    wtoFetch('/data', {
-      i: 'TP_A_0430',
-      r: reporters,
-      ps: `${currentYear - 3}-${currentYear}`,
-      fmt: 'json',
-      mode: 'full',
-      max: '500',
-    }),
-  ]);
+  // Fetch agricultural and non-agricultural tariffs sequentially — WTO free tier has strict quota
+  const agriData = await wtoFetch('/data', {
+    i: 'TP_A_0160',
+    r: reporters,
+    ps: `${currentYear - 3}-${currentYear}`,
+    fmt: 'json',
+    mode: 'full',
+    max: '500',
+  });
+  const nonAgriData = await wtoFetch('/data', {
+    i: 'TP_A_0430',
+    r: reporters,
+    ps: `${currentYear - 3}-${currentYear}`,
+    fmt: 'json',
+    mode: 'full',
+    max: '500',
+  });
 
   if (!agriData && !nonAgriData) return { barriers: [], ok: false };
 
